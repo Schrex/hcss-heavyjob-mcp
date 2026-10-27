@@ -1,0 +1,31 @@
+# Cloudflare Workers FREE plan. Secrets are set with `wrangler secret put`, NEVER in this file.
+name = "schrex-hcss-heavyjob-mcp"
+main = "src/worker.ts"
+compatibility_date = "2026-10-01"
+# Lets the OAuth library accept Client ID Metadata Document clients (it logs a notice without it). DCR works either way.
+compatibility_flags = ["global_fetch_strictly_public"]
+workers_dev = true
+
+[vars]
+# Read-only HCSS scopes only. timecards:read is needed for timeCardInfo / timeCards/{id}.
+HCSS_SCOPE = "heavyjob:read timecards:read"
+ALLOWED_CIDRS = "160.79.104.0/21"     # applied to /mcp only (Anthropic egress)
+HCSS_PAGE_SIZE = "1000"
+HCSS_MAX_SUBREQUESTS = "45"
+EXPORT_TTL_SECONDS = "900"
+PUBLIC_ORIGIN = "https://schrex-hcss-heavyjob-mcp.schrex.workers.dev"   # canonical OAuth resource = PUBLIC_ORIGIN + /mcp
+
+# Create with `npx wrangler kv namespace create EXPORTS` / `... OAUTH_KV` and paste the ids below.
+[[kv_namespaces]]
+binding = "EXPORTS"
+id = "e493ba86e89a45bf9ebc5fcc838b8835"
+
+[[kv_namespaces]]
+binding = "OAUTH_KV"   # OAuth clients, grants, hashed tokens (@cloudflare/workers-oauth-provider) + login throttle counters
+id = "01cab13e8ba944e5abc26dbe964aad9d"
+
+# Secrets (set once each, values never committed):
+#   HCSS_CLIENT_ID, HCSS_CLIENT_SECRET, HCSS_BUSINESS_UNIT_ID (optional)
+#   ALLOWED_USER_EMAIL     comma-separated, e.g. ryan@schrex.com
+#   ACCESS_PASSWORD_HASH   pbkdf2$30000$<salt>$<hash>  (see setup-guide.md)
+#   TOKEN_EPOCH            any string; change it to revoke every token

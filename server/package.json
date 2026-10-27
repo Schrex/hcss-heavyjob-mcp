@@ -1,0 +1,27 @@
+{
+  "name": "schrex-hcss-heavyjob",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Remote (Streamable HTTP) read-only MCP connector for HCSS HeavyJob on Cloudflare Workers (free plan), Schreiber Excavating",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@cloudflare/workers-oauth-provider": "^1.2.3",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "fflate": "^0.8.2",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261006.1",
+    "typescript": "^5.5.0",
+    "wrangler": "^4.40.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

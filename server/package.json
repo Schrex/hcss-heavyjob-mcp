@@ -1,11 +1,12 @@
 {
   "name": "schrex-hcss-heavyjob",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Remote (Streamable HTTP) read-only MCP connector for HCSS HeavyJob on Cloudflare Workers (free plan), Schreiber Excavating",
+  "description": "Remote (Streamable HTTP) read-only MCP connector for HCSS HeavyJob and Telematics on Cloudflare Workers (free plan), Schreiber Excavating",
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "node --experimental-transform-types --import ./test/register.mjs --test test/telematics.test.ts",
     "build": "wrangler deploy --dry-run --outdir dist",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"

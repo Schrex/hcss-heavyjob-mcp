@@ -10,6 +10,7 @@ export interface Env {
   HCSS_SCOPE?: string;
   HCSS_TOKEN_URL?: string;
   HCSS_API_BASE?: string;
+  HCSS_TELEMATICS_BASE?: string;
   ALLOWED_CIDRS?: string;
   HCSS_PAGE_SIZE?: string;
   HCSS_MAX_SUBREQUESTS?: string;
@@ -18,6 +19,7 @@ export interface Env {
   EXPORTS: KVNamespace;
   OAUTH_KV: KVNamespace;             // required by @cloudflare/workers-oauth-provider; also holds login throttle counters
   OAUTH_PROVIDER: import("@cloudflare/workers-oauth-provider").OAuthHelpers; // injected by the library
+  TELEMATICS_DB: D1Database;         // daily meter snapshots (migrations/0001_meter_snapshots.sql)
 }
 
 export interface Config {
@@ -26,6 +28,7 @@ export interface Config {
   scope: string;
   tokenUrl: string;
   apiBase: string;
+  telematicsBase: string;
   businessUnitId?: string;
   pageSize: number;
   maxSubrequests: number;
@@ -37,7 +40,8 @@ const num = (v: string | undefined, d: number) => (v && Number.isFinite(Number(v
 
 export function loadConfig(env: Env): Config {
   if (!env.HCSS_CLIENT_ID || !env.HCSS_CLIENT_SECRET) throw new Error("HCSS_CLIENT_ID / HCSS_CLIENT_SECRET secrets are not set.");
-  const scope = env.HCSS_SCOPE || "heavyjob:read timecards:read";
+  // telematics:read is requested with the HeavyJob scopes. If HCSS rejects that combination, HeavyJob calls retry without it.
+  const scope = env.HCSS_SCOPE || "heavyjob:read timecards:read telematics:read";
   if (/:write|admin/i.test(scope)) throw new Error("HCSS_SCOPE must be read-only (no :write / admin scopes).");
   return {
     clientId: env.HCSS_CLIENT_ID,
@@ -46,6 +50,8 @@ export function loadConfig(env: Env): Config {
     tokenUrl: env.HCSS_TOKEN_URL || "https://api.hcssapps.com/identity/connect/token",
     // HeavyJob OpenAPI "servers": https://api.hcssapps.com/heavyjob ; paths start with /api/v1 or /api/v2
     apiBase: (env.HCSS_API_BASE || "https://api.hcssapps.com/heavyjob").replace(/\/$/, ""),
+    // Telematics OpenAPI "servers": https://api.hcssapps.com/telematics
+    telematicsBase: (env.HCSS_TELEMATICS_BASE || "https://api.hcssapps.com/telematics").replace(/\/$/, ""),
     businessUnitId: env.HCSS_BUSINESS_UNIT_ID || undefined,
     pageSize: Math.min(5000, Math.max(1, num(env.HCSS_PAGE_SIZE, 1000))),
     maxSubrequests: Math.min(48, num(env.HCSS_MAX_SUBREQUESTS, 45)),

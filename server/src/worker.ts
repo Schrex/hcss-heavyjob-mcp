@@ -5,6 +5,7 @@ import { HcssClient } from "./hcss.js";
 import { buildServer } from "./tools.js";
 import { ipAllowed } from "./ip.js";
 import { emailAllowed, handleAuthorize, type AuthProps } from "./auth.js";
+import { captureTelematicsSnapshot } from "./telematics_db.js";
 
 const ACCESS_TTL_S = 60 * 60;            // 1 h access tokens
 const REFRESH_TTL_S = 14 * 24 * 60 * 60; // grant (refresh) lives 14 days from sign-in, then sign in again
@@ -110,5 +111,14 @@ export default {
     }
     const origin = (env.PUBLIC_ORIGIN || new URL(request.url).origin).replace(/\/$/, "").toLowerCase();
     return getProvider(origin).fetch(request, env, ctx);
+  },
+  /** 09:00 UTC daily. Writes one meter_snapshots row per telematics unit. Does not go through user OAuth. */
+  async scheduled(controller: ScheduledController, env: Env): Promise<void> {
+    try {
+      await captureTelematicsSnapshot(env, new Date(controller.scheduledTime));
+    } catch (e) {
+      console.error(JSON.stringify({ evt: "telematics_snapshot_failed", error: (e as Error).message }));
+      throw e;
+    }
   },
 } satisfies ExportedHandler<Env>;

@@ -66,7 +66,7 @@ function page(d: ConsentDescription, handle: string, error?: string): string {
 <title>Sign in: Schreiber HeavyJob</title>
 <style>body{font:16px system-ui,sans-serif;max-width:26rem;margin:3rem auto;padding:0 1rem;color:#222}input{width:100%;padding:.5rem;margin:.25rem 0 1rem;box-sizing:border-box}button{padding:.6rem 1.2rem;margin-right:.5rem}.err{color:#b00020}.small{color:#555;font-size:.9rem}</style>
 <h1>Schreiber HeavyJob</h1>
-<p><strong>${name}</strong> wants read-only access to HeavyJob data.${d.clientDomain ? ` Published by <strong>${esc(d.clientDomain)}</strong>.` : " (This app registered itself; its name is not verified.)"}</p>
+<p><strong>${name}</strong> wants read-only access to HeavyJob and telematics data.${d.clientDomain ? ` Published by <strong>${esc(d.clientDomain)}</strong>.` : " (This app registered itself; its name is not verified.)"}</p>
 <p class="small">Access will be sent to <strong>${esc(d.redirectHost)}</strong>.${d.redirectIsLoopback ? " <strong>This sends access to an app on your computer.</strong>" : ""} Only approved users can sign in.</p>
 ${error ? `<p class="err">${esc(error)}</p>` : ""}
 <form method="post">

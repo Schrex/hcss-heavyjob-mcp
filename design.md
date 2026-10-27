@@ -11,8 +11,9 @@ Source: HCSS OpenAPI pages on developer.hcssapps.com (fetched 2026-10-19; HeavyJ
 
 ## Auth (VERIFIED from docs unless noted)
 - Token: `POST https://api.hcssapps.com/identity/connect/token`, client_credentials, form body, UA `Mozilla/5.0 SchreiberMCP/0.1`, Basic-auth fallback, cached 1 h (same code as HeavyBid).
-- Scopes: **`heavyjob:read`** (every endpoint below except time cards) and **`timecards:read`** (`/api/v1/timeCardInfo`, `/api/v1/timeCards/{id}`), per each operation's OpenAPI `security` block. Docs: https://developer.hcssapps.com/hcss/docs/api-scopes.
-- Use a **new dedicated API client** with only `heavyjob:read timecards:read`. Can be the HeavyBid client if an admin adds these two scopes, but separate is safer (UNVERIFIED whether the license allows another client).
+- Scopes: **`heavyjob:read`** (every HeavyJob endpoint below except time cards), **`timecards:read`** (`/api/v1/timeCardInfo`, `/api/v1/timeCards/{id}`), and **`telematics:read`** (Telematics `GET /api/v1/equipment` only). Never `telematics:write`. Docs: https://developer.hcssapps.com/hcss/docs/api-scopes and the Telematics operation security description ("telematics:read or telematics:write").
+- HCSS rejects a token request when any requested scope is missing (`invalid_scope` on the whole request). HeavyJob calls try the combined scope, then fall back to `heavyjob:read timecards:read` so existing tools keep working. Telematics calls use that token only when the response grants `telematics:read`; otherwise they request a separate `telematics:read` token. A missing grant or a 403 returns a fixed tool error and is not swallowed.
+- Use a **new dedicated API client** with only `heavyjob:read timecards:read telematics:read`. Can be the HeavyBid client if an admin adds these scopes, but separate is safer (UNVERIFIED whether the license allows another client).
 
 ## User auth (Claude to connector): OAuth 2.1, one allowed user
 Library: `@cloudflare/workers-oauth-provider` 1.2.3 (Cloudflare's official; API checked against its bundled README/docs and .d.ts). One Worker plays both roles (`OAuthProvider`, `apiRoute: /mcp`).
@@ -42,6 +43,8 @@ Library: `@cloudflare/workers-oauth-provider` 1.2.3 (Cloudflare's official; API 
 | get_diaries | POST /api/v1/diaries/search (businessUnitId required) | https://developer.hcssapps.com/hcss/reference/diarycontroller_querydiariesasync | VERIFIED |
 | list_employees | GET /api/v1/businessUnits/{bu}/employees?isActive&isDeleted&isForeman | https://developer.hcssapps.com/hcss/reference/employeecontroller_getemployeesasync | VERIFIED |
 | list_equipment | GET /api/v1/businessUnits/{bu}/equipment?isActive&isDeleted | https://developer.hcssapps.com/hcss/reference/equipmentcontroller_getequipmentasync | VERIFIED |
+| get_telematics_equipment | GET https://api.hcssapps.com/telematics/api/v1/equipment?limit&cursor&isRegistered | https://developer.hcssapps.com/hcss/reference/get_api-v1-equipment-1 | VERIFIED from the published OpenAPI (not a live call). Compact mapping and the HeavyJob code join are ours. `detail:true` returns the raw record plus mapped fields. `meter_fields_found` lists payload keys when a meter value is missing. |
+| get_telematics_usage | D1 `meter_snapshots` filled by the 09:00 UTC cron from the same equipment list | | Derived. Deltas, flags, and thresholds are computed here. Usage is empty until snapshots exist. |
 | get_job_cost_summary | costCodes (budget) + POST /api/v1/jobCostsToDate/search (to date) **or** POST /api/v1/jobCosts/advancedRequest (date range) | https://developer.hcssapps.com/hcss/reference/costcontroller_queryjobcoststodateasync , https://developer.hcssapps.com/hcss/reference/costcontroller_queryjobcostsasync | endpoints VERIFIED; join + derived columns UNVERIFIED vs a HeavyJob Cost Report |
 | export_job_cost_summary | same as above → xlsx/csv in KV, single-use link, 15 min | | same |
 
@@ -63,7 +66,8 @@ auto-select the single real business unit (ignore all-zero placeholder, dedupe b
 ## Free-plan limits and HCSS rate limit
 - **Subrequests (50; budget 45):** typical tool = token 1 (cached) + business units 1 (once per isolate) + jobs 1 + data pages. Pages are `limit=1000` (HCSS_PAGE_SIZE); cap 20,000 rows per pull (≤20 pages), plus a BudgetError past 45. Worst case: job summary on a huge job with date range ≈ 1+1+1+N(cost code pages)+M(cost rows/1000). Daily rows per foreman per cost code for a long range on a big job is the likeliest to hit the cap → `scope: partial`; narrow the range or use job-to-date (much fewer rows).
 - **CPU (10 ms):** biggest risk is JSON parsing of large pages: `hours/employees` over a month on a big job (nested hoursDetails, meal/break fields) and `jobCosts/advancedRequest` over a long range. Mitigations: compact output, grouping by default, xlsx level-0 zip. If Error 1102 appears, shorten ranges or move to Workers Paid ($5/mo).
-- **HCSS:** 100 req/min + 20 concurrent per company, shared with Zach's 03:00 ET nightly sync and the HeavyBid connector (https://developer.hcssapps.com/hcss/docs/rate-limits). Sequential paging, Retry-After/backoff (≤4 tries), 5-min isolate cache.
+- **HCSS:** 100 req/min + 20 concurrent per company, shared with Zach's 03:00 ET nightly sync, the HeavyBid connector, and the 09:00 UTC telematics snapshot (https://developer.hcssapps.com/hcss/docs/rate-limits). Sequential paging, Retry-After/backoff (≤4 tries), 5-min isolate cache.
+- **Cron (free plan):** 5 cron triggers per account, 10 ms CPU per cron. The telematics cron is `0 9 * * *` UTC. D1 free tier: 5M rows read/day, 100k rows written/day, 5 GB. Placeholder `database_id` in wrangler.toml must be replaced before deploy (`npx wrangler d1 create schrex-telematics`, then `npx wrangler d1 migrations apply schrex-telematics --remote`).
 
 ## Open questions
 0. Who is the one allowed user (email)? Does Claude Team let a member add a personal custom connector, or must the Owner add it org-wide? (UNVERIFIED for Schreiber's plan.)

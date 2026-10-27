@@ -3,13 +3,15 @@ import { z } from "zod";
 import type { Config, Env } from "./config.js";
 import { codeCompare, codeEq, normCode, type HcssClient } from "./hcss.js";
 import { jobCostSummary, money, qty, SUMMARY_COLUMNS } from "./summary.js";
+import { loadSnapshots } from "./telematics_db.js";
+import { buildEquipmentList, computeUsage, heavyjobIndex, isRegisteredQuery, mapTelematicsEquipmentDetail, pageRows } from "./telematics.js";
 import { toCsv, toXlsx } from "./xlsx.js";
 
 type Rec = Record<string, unknown>;
 let autoBu: string | undefined; // isolate-scoped; only set when exactly one real unit exists
 
 export function buildServer(cfg: Config, hcss: HcssClient, env: Env, origin: string): McpServer {
-  const server = new McpServer({ name: "schrex-hcss-heavyjob", version: "0.1.0" });
+  const server = new McpServer({ name: "schrex-hcss-heavyjob", version: "0.2.0" });
 
   // ---------- shared helpers ----------
   const guid = z.string().uuid();
@@ -472,6 +474,56 @@ export function buildServer(cfg: Config, hcss: HcssClient, env: Env, origin: str
       await env.EXPORTS.put(`export:${id}`, buf, { expirationTtl: cfg.exportTtlSeconds, metadata: { name: fname, mime } });
       return reply({ file: fname, rows: s.rows.length, truncated: s.truncated, totals: s.totals, download_url: `${origin}/exports/${id}`, hcss_calls: hcss.used,
         note: `Single-use link, expires in ${Math.round(cfg.exportTtlSeconds / 60)} minutes. Don't share it.` });
+    },
+  );
+
+  server.tool(
+    "get_telematics_equipment",
+    "Telematics equipment with last location, odometer, and engine hours. Registered units only unless include_unregistered is true (that omits isRegistered and returns every unit). Compact rows by default. detail:true returns each untouched HCSS record plus the mapped fields (HCSS keys are not renamed or dropped). If odometer or engine hours cannot be read, the row includes meter_fields_found: the field names actually on that HCSS record. Joined to HeavyJob equipment by code (trim, case-insensitive; inactive included, deleted excluded). Needs the telematics:read scope. All HCSS pages are fetched first (subrequest cap applies), then text filter, skip, and max_records. Totals cover the full matched set.",
+    { ...buArg, ...pageArgs,
+      text: z.string().optional().describe("Equipment code or description contains (case-insensitive)"),
+      include_unregistered: z.boolean().default(false).describe("Also return unregistered units. Default is registered only."),
+      detail: z.boolean().default(false).describe("Untouched HCSS record for each unit, plus mapped fields (equipment_code, odometer, engine_hours, HeavyJob match). Does not replace HCSS fields.") },
+    async (a) => {
+      const pulled = await hcss.fetchTelematicsEquipment(CAP, isRegisteredQuery(a.include_unregistered));
+      const buId = await bu(a.business_unit_id);
+      const hj = (await hcss.get<Rec[]>(`/api/v1/businessUnits/${buId}/equipment`, { isDeleted: false })) ?? [];
+      const index = heavyjobIndex(hj);
+      const built = buildEquipmentList(pulled.records, index, { text: a.text, skip: a.skip, max_records: a.max_records ?? 100, truncated: pulled.truncated });
+      return reply({
+        truncated: pulled.truncated,
+        totals: built.totals,
+        total_matching: built.total_matching,
+        returned: built.returned,
+        skip: built.skip,
+        next_skip: built.next_skip,
+        data: built.data.map((r) => a.detail ? mapTelematicsEquipmentDetail(r.raw, index) : r.compact),
+      });
+    },
+  );
+
+  server.tool(
+    "get_telematics_usage",
+    `Miles and engine hours from daily telematics snapshots (${DATE_HELP}, inclusive). Per unit per day, miles_driven is the odometer change versus the previous snapshot and engine_hours is the hour-meter change. group_by equipment (default) or date. Flags on each row: no_baseline, gap (missing days), negative_delta (meter reset or replacement), zero_jump (same reading and same timestamp as the previous snapshot), implausible_jump (over 1000 miles or 24 engine hours per day, scaled across a gap). Negative and implausible deltas are flagged and left out of the counted totals. Nothing is returned until the daily snapshot cron has stored at least one day.`,
+    { ...pageArgs,
+      start_date: z.string().describe(DATE_HELP),
+      end_date: z.string().describe(DATE_HELP),
+      equipment_code: z.string().optional().describe("Only this equipment code (trim and case ignored)"),
+      group_by: z.enum(["equipment", "date"]).default("equipment") },
+    async (a) => {
+      const r = range(a);
+      if (!r.start || !r.end) throw new Error("start_date and end_date are required (YYYY-MM-DD).");
+      if (!env.TELEMATICS_DB) throw new Error("TELEMATICS_DB is not configured. Create the D1 database and apply migrations before calling get_telematics_usage.");
+      const code = a.equipment_code?.trim() || undefined;
+      const snaps = await loadSnapshots(env.TELEMATICS_DB, r.start, r.end, code);
+      const usage = computeUsage(snaps, { start_date: r.start, end_date: r.end, equipment_code: code, group_by: a.group_by });
+      const p = pageRows(usage.rows, a.skip ?? 0, a.max_records ?? 50);
+      return reply({
+        group_by: a.group_by,
+        totals: usage.totals,
+        note: "Usage starts accruing only after daily snapshots begin (cron 09:00 UTC). A unit's first snapshot has no delta until an earlier snapshot exists.",
+        ...p,
+      });
     },
   );
 

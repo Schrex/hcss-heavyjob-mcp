@@ -8,7 +8,9 @@ workers_dev = true
 
 [vars]
 # Read-only HCSS scopes only. timecards:read is needed for timeCardInfo / timeCards/{id}.
-HCSS_SCOPE = "heavyjob:read timecards:read"
+# telematics:read is needed for get_telematics_equipment and the daily snapshot.
+# Never add telematics:write. If HCSS rejects the combined scope, HeavyJob calls fall back without telematics:read.
+HCSS_SCOPE = "heavyjob:read timecards:read telematics:read"
 ALLOWED_CIDRS = "160.79.104.0/21"     # applied to /mcp only (Anthropic egress)
 HCSS_PAGE_SIZE = "1000"
 HCSS_MAX_SUBREQUESTS = "45"
@@ -29,3 +31,16 @@ id = "01cab13e8ba944e5abc26dbe964aad9d"
 #   ALLOWED_USER_EMAIL     comma-separated, e.g. ryan@schrex.com
 #   ACCESS_PASSWORD_HASH   pbkdf2$30000$<salt>$<hash>  (see setup-guide.md)
 #   TOKEN_EPOCH            any string; change it to revoke every token
+
+# Daily telematics snapshot, 09:00 UTC. Free plan: 5 cron triggers per account, 10 ms CPU per cron.
+[triggers]
+crons = ["0 9 * * *"]
+
+# Placeholder database_id. Replace it before deploy. See README "Telematics setup".
+#   npx wrangler d1 create schrex-telematics
+#   npx wrangler d1 migrations apply schrex-telematics --remote
+[[d1_databases]]
+binding = "TELEMATICS_DB"
+database_name = "schrex-telematics"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"

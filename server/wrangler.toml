@@ -42,5 +42,5 @@ crons = ["0 9 * * *"]
 [[d1_databases]]
 binding = "TELEMATICS_DB"
 database_name = "schrex-telematics"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "7711753c-2623-46e8-9676-601fdb31cbbb"
 migrations_dir = "migrations"

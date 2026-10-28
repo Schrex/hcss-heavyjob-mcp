@@ -30,7 +30,7 @@ The connector URL is `https://schrex-hcss-heavyjob-mcp.schrex.workers.dev/mcp` (
 Settings → Connectors → **Add custom connector**. Name `Schreiber HeavyJob`, URL above. Leave the OAuth Client ID/Secret fields empty (Claude registers itself). Save.
 (If only the Team Owner can add custom connectors, the Owner adds it; everyone sees it, but only the allowed user can sign in.)
 
-## Part 3: the allowed user signs in (once every 14 days)
+## Part 3: the allowed user signs in (once every 90 days)
 1. Settings → Connectors → Schreiber HeavyJob → **Connect**.
 2. A browser page "Schreiber HeavyJob" opens: it shows that Claude wants read-only access and where access is sent (claude.ai).
 3. Enter your email and the connector password → **Sign in and allow**. You're sent back to Claude, connected.

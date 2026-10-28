@@ -8,7 +8,7 @@ import { emailAllowed, handleAuthorize, type AuthProps } from "./auth.js";
 import { captureTelematicsSnapshot } from "./telematics_db.js";
 
 const ACCESS_TTL_S = 60 * 60;            // 1 h access tokens
-const REFRESH_TTL_S = 14 * 24 * 60 * 60; // grant (refresh) lives 14 days from sign-in, then sign in again
+const REFRESH_TTL_S = 90 * 24 * 60 * 60; // grant (refresh) lives 90 days from sign-in, then sign in again
 
 const unauthorized = (why: string) => new Response(JSON.stringify({ error: "invalid_token", error_description: why }), {
   status: 401, headers: { "Content-Type": "application/json", "WWW-Authenticate": `Bearer error="invalid_token", error_description="${why}"` },
